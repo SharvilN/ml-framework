@@ -1,1 +1,1 @@
-# ml-framework
+# ml-project-template
