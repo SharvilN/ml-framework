@@ -7,6 +7,7 @@ from sklearn import preprocessing
 from sklearn import metrics
 
 from . import dispatcher
+from . import cross_validation
 
 FOLD = int(os.environ.get('FOLD'))
 TRAINING_DATA = os.environ.get('TRAINING_DATA')
@@ -23,6 +24,10 @@ FOLD_MAPPING = {
 
 if __name__ == '__main__':
     df = pd.read_csv(TRAINING_DATA)
+
+    cv = cross_validation.CrossValidation(df, ['target'], shuffle=True)
+    df = cv.split()
+    
     test_df = pd.read_csv(TEST_DATA)
     train = df[df.kfold.isin(FOLD_MAPPING.get(FOLD))]
     valid = df[df.kfold == FOLD]

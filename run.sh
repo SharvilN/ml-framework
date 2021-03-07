@@ -1,4 +1,4 @@
-export TRAINING_DATA=inputs/train_folds.csv
+export TRAINING_DATA=inputs/train.csv
 export TEST_DATA=inputs/test.csv
 
 export N_FOLDS=5
