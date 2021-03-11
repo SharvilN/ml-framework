@@ -137,3 +137,6 @@ models/
 
 # vscode
 .vscode
+
+# notebooks
+notebooks/
