@@ -58,7 +58,7 @@ class CrossValidation:
 
             for fold, (train_idx, valid_idx) in enumerate(kf.split(X=self.df, y=self.df[target].values)):
                 print(len(train_idx), len(valid_idx))
-                self.df.loc[:, 'kfold'] = fold
+                self.df.loc[valid_idx, 'kfold'] = fold
         
         elif self.problem_type.startswith('holdout_'):
             holdout_pctg = int(self.problem_type.split('_')[1])
@@ -77,7 +77,7 @@ class CrossValidation:
 
             for fold, (train_idx, valid_idx) in enumerate(kf.split(X=self.df, y=targets)):
                 print(len(train_idx), len(valid_idx))
-                self.df.loc[:, 'kfold'] = fold
+                self.df.loc[valid_idx, 'kfold'] = fold
 
         else:
             raise Exception(f'Invalid problem type found : {self.problem_type}')
