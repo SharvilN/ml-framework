@@ -1,13 +1,16 @@
 from sklearn import preprocessing
 
-"""
-- label encoding
-- one hot encoding
-- binarization
-
-"""
-
 class CategoricalFeatureEncoder():
+    """
+    Universal categorical feature encoder supports most of the common types of categorical feature encoding
+    techniques
+
+    - label encoding
+    - one hot encoding
+    - binarization
+    - target encoding
+    -entity embedding
+    """
 
     def __init__(self, df, cat_features, encoding_type, handle_na=False):
         """
@@ -27,7 +30,7 @@ class CategoricalFeatureEncoder():
 
         if self.handle_na:
             for c in self.cat_features:
-                self.df.loc[:, c] = self.df.loc[:, c].astype(str).fillna("-999999999")
+                self.df.loc[:, c] = self.df.loc[:, c].astype(str).fillna("NONE")
 
     def _label_encoding(self):
         for c in self.cat_features:
@@ -62,18 +65,22 @@ class CategoricalFeatureEncoder():
             return self._binary_encoding()
         elif self.encoding_type == "ohe":
             return self._one_hot_encoding()
+        elif self.encoding_type == "target":
+            return self._target_encoding()
+        elif self.encoding_type == "entity":
+            return self._entity_embeddings()
         else:
             raise Exception(f"Encoding type {self.encoding_type} not supported!")
 
     def transform(self, dataframe):
         if self.handle_na:
             for c in self.cat_features:
-                dataframe.loc[:, c] = dataframe.loc[:, c].astype(str).fillna("-999999999")
+                dataframe.loc[:, c] = dataframe.loc[:, c].astype(str).fillna("NONE")
         
         if self.encoding_type == 'label':
             for c, lbl in self.label_encoders.items():
                 dataframe.loc[:, c] = lbl.transform(dataframe[c].values)
-            return datafame
+            return dataframe
         
         elif self.encoding_type == 'binary':
             for c, lbl in self.binary_encoders.items():
