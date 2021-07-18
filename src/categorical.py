@@ -1,3 +1,12 @@
+import torch
+import torch.nn as nn
+from typing import List
+
+from sklearn import model_selection
+
+from pandas.core.frame import DataFrame
+
+import numpy as np
 from sklearn import preprocessing
 
 class CategoricalFeatureEncoder():
@@ -9,7 +18,7 @@ class CategoricalFeatureEncoder():
     - one hot encoding
     - binarization
     - target encoding
-    -entity embedding
+    - entity embedding
     """
 
     def __init__(self, df, cat_features, encoding_type, handle_na=False):
@@ -26,6 +35,8 @@ class CategoricalFeatureEncoder():
         self.label_encoders = dict()
         self.binary_encoders= dict()
         self.ohe = None
+        self.entity_encoder = None
+
         self.output_df = self.df.copy(deep=True)
 
         if self.handle_na:
@@ -58,6 +69,13 @@ class CategoricalFeatureEncoder():
         ohe.transform(self.output_df[self.cat_features].values)
         return self.output_df
         
+    def _entity_embeddings(self):
+        self.output_df = self._label_encoding()
+        for col in self.cat_features:
+            num_unique_vals = self.output_df[col].nunique
+            embed_dim = int(min(np.ceil(num_unique_vals/2), 50))
+            
+
     def fit_transform(self):
         if self.encoding_type == "label":
             return self._label_encoding()
@@ -91,6 +109,33 @@ class CategoricalFeatureEncoder():
                     dataframe[new_col] = bin_vals[:, j]
             return dataframe
     
+class EntityEmbeddingExtractor(nn.Module):
+
+    def __init__(self, df: DataFrame, cat_features: List[str]):
+        super(EntityEmbeddingExtractor, self).__init__()
+        self.embeddings = nn.ModuleList()
+        total_embed_dim = 0
+        for col in cat_features:
+            num_unique_values = df[col].nunique()
+            embed_dim = int(min(np.ceil(num_unique_values/2), 50))
+            self.embeddings.append(nn.Embedding(num_embeddings=num_unique_values+1,
+                                     embedding_dim=embed_dim))
+            total_embed_dim += embed_dim
+        self.linear = nn.Linear(in_features=total_embed_dim, out_features=128)
+        self.dropout = nn.Dropout(0.2)
+        self.batchnorm = nn.BatchNorm1d(128)
+
+    def forward(self, x):
+        outputs = [embed_layer(cat_token)
+                     for (cat_token, embed_layer) in zip(x, self.embeddings)]
+        outputs = torch.tensor(outputs)
+        print(f"output shape before flatten: {outputs.shape}")
+        outputs = outputs.view(-1)
+        print(f"flattened output shape: {outputs.shape}")
+        y = self.linear(outputs)
+        y = self.dropout(outputs)
+        y = self.batchnorm(outputs)
+        return y
 
 if __name__ == "__main__":
     import pandas as pd
@@ -113,3 +158,11 @@ if __name__ == "__main__":
     print(test.shape)
 
     print(full_df.head())
+
+    df = train_df
+    X, y = df.drop(["target", "id"], axis=1), df["target"]
+    xtrain, xval, ytrain, yval = \
+    model_selection.train_test_split(X, y, test_size=0.2)
+    model = EntityEmbeddingExtractor(xtrain, X.columns.values)
+
+    print(model)

@@ -1,4 +1,9 @@
 import pandas as pd
+import numpy as np
+
+from typing import List, Optional
+from enum import Enum, auto
+from pandas.core.frame import DataFrame
 from sklearn import model_selection
 
 '''
@@ -8,19 +13,31 @@ from sklearn import model_selection
 - single column regression
 - multi column regression
 - holdout
+- entity embeddings
 '''
+
+class ProblemType(Enum):
+        BINARY = auto(),
+        MULTICLASS = auto(),
+        REGRESSION = auto(),
+        MULTI_COL_REGRESSION = auto(),
+        HOLDOUT = auto(),
+        MULTILABEL = auto(),
+        ENTITY_EMBEDDING = auto()
+
 
 class CrossValidation:
 
     def __init__(
             self,
-            df,
-            target_cols,
-            shuffle,
-            problem_type='binary',
-            n_folds=5,
-            multilabel_delimiter=',',
-            random_state=31
+            df: DataFrame,
+            target_cols: List[str],
+            shuffle: bool,
+            problem_type: ProblemType,
+            holdout_pct=None,
+            n_folds: int = 5,
+            multilabel_delimiter: str = ',',
+            random_state: int = 31
         ):
         self.df = df
         self.target_cols = target_cols
@@ -28,6 +45,7 @@ class CrossValidation:
         self.problem_type = problem_type
         self.shuffle = shuffle
         self.n_folds = n_folds
+        self.holdout_pct = holdout_pct
         self.multilabel_delimiter = multilabel_delimiter
         self.random_state = random_state
 
@@ -36,7 +54,7 @@ class CrossValidation:
         self.df['kfold'] = -1
 
     def split(self):
-        if self.problem_type in ('binary', 'multiclass'):
+        if self.problem_type in (ProblemType.BINARY, ProblemType.MULTICLASS):
             if self.n_targets != 1:
                 raise Exception(f'Invalid number of targets {self.n_targets} for selected problem type: {self.problem_type}') 
             
@@ -47,27 +65,45 @@ class CrossValidation:
                 print(len(train_idx), len(val_idx))
                 self.df.loc[val_idx, 'kfold'] = fold
 
-        elif self.problem_type in ('single_col_regression', 'multi_col_regression'):
-            if self.n_targets != 1 and self.problem_type == 'single_col_regression':
+        elif self.problem_type in (ProblemType.REGRESSION, ProblemType.MULTI_COL_REGRESSION):
+            if self.n_targets != 1 and self.problem_type == ProblemType.REGRESSION:
                 raise Exception(f'Invalid combination of number of targets {self.n_targets} and problem type {self.problem_type}')
-            if self.n_targets < 2 and self.problem_type == 'multi_col_regression':
+            if self.n_targets < 2 and self.problem_type == ProblemType.MULTI_COL_REGRESSION:
                 raise Exception(f'Invalid combination of number of targets {self.n_targets} and problem type {self.problem_type}')
             
             target = self.target_cols[0]
-            kf = model_selection.KFold(n_splits=self.n_folds)
 
-            for fold, (train_idx, valid_idx) in enumerate(kf.split(X=self.df, y=self.df[target].values)):
+            # calculate number of bins by Sturge's rule
+            # I take the floor of the value, you can also
+            # just round it
+            num_bins = int(np.floor(1 + np.log2(len(self.df))))
+            
+            # bin targets
+            self.df.loc[:, "bins"] = pd.cut(
+                self.df["target"], bins=num_bins, labels=False
+            )
+            
+            # initiate the kfold class from model_selection module
+            kf = model_selection.StratifiedKFold(n_splits=self.n_folds)
+            
+            # fill the new kfold column
+            # note that, instead of targets, we use bins!
+            for fold, (train_idx, valid_idx) in enumerate(kf.split(X=self.df, y=self.df.bins.values)):
                 print(len(train_idx), len(valid_idx))
                 self.df.loc[valid_idx, 'kfold'] = fold
+            
+            # drop the bins column
+            self.df = self.df.drop("bins", axis=1)
+
         
-        elif self.problem_type.startswith('holdout_'):
-            holdout_pctg = int(self.problem_type.split('_')[1])
+        elif self.problem_type == ProblemType.HOLDOUT:
+            holdout_pctg = self.holdout_pct
             n_holdout_samples = int(len(self.df) * holdout_pctg / 100)
             self.df.loc[:n_holdout_samples, 'kfold'] = 0
             self.df.loc[n_holdout_samples: , 'kfold'] = 1
             print(n_holdout_samples)
 
-        elif self.problem_type == 'multilabel':
+        elif self.problem_type == ProblemType.MULTILABEL:
             if self.n_targets != 1:
                 raise Exception(f'Invalid combination of number of targets {self.n_targets} and problem type {self.problem_type}')
 
@@ -84,10 +120,4 @@ class CrossValidation:
         return self.df
 
 if __name__ == '__main__':
-    df = pd.read_csv('../inputs/train_1.csv')
-    cv = CrossValidation(df, target_cols=['attribute_ids'], shuffle=True, problem_type='multilabel', multilabel_delimiter=' ')
-
-    df_split = cv.split()
-    print(df_split.head())
-    print(df_split.tail())
-    print(df_split.value_counts())
+    df = pd.read_csv('../inputs/train_cat.csv')
